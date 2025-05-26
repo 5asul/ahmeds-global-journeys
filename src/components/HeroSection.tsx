@@ -23,14 +23,6 @@ const HeroSection = () => {
           <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
         </Button>
       </div>
-      <style jsx global>{`
-        .shadow-text {
-          text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
-        }
-        .shadow-text-sm {
-          text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
-        }
-      `}</style>
     </div>
   );
 };
