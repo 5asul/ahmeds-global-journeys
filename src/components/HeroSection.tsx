@@ -1,6 +1,5 @@
 
-import { Button } from '@/components/ui/button'; // Using shadcn button
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react'; // This import is no longer used directly, but Button might use it if it were still here. Consider removing if not used by other elements in a larger refactor.
 
 const HeroSection = () => {
   const heroImageUrl = "https://images.unsplash.com/photo-1469474968028-56623f02e42e?ixlib=rb-4.0.3&q=80&fm=jpg&crop=entropy&cs=tinysrgb&w=1920&fit=max";
@@ -18,10 +17,7 @@ const HeroSection = () => {
         <p className="text-xl md:text-2xl text-gray-200 font-sans mb-10 max-w-3xl mx-auto shadow-text-sm">
           Your personal travel guide to hidden wonders and iconic destinations.
         </p>
-        <Button size="lg" className="font-poppins font-semibold text-lg px-10 py-6 btn-accent-custom hover:shadow-xl transform hover:scale-105 transition-all duration-300 group">
-          Start Exploring
-          <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
-        </Button>
+        {/* "Start Exploring" Button removed as per user request */}
       </div>
     </div>
   );
