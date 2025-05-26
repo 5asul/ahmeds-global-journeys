@@ -1,19 +1,27 @@
-
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label'; // Assuming you have a Label component from shadcn/ui
+import { Label } from '@/components/ui/label';
 import { MapPin } from 'lucide-react';
+import { toast as sonnerToast } from "sonner";
 
 const TripPlannerForm = () => {
   const [startingPoint, setStartingPoint] = useState('');
   const [destination, setDestination] = useState('');
+  const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Placeholder for future submission logic
-    console.log('Planning trip from:', startingPoint, 'to:', destination);
-    // toast({ title: "Trip Planning", description: `Planning from ${startingPoint} to ${destination}. Feature coming soon!` });
+    if (!startingPoint.trim() || !destination.trim()) {
+      sonnerToast.error("Missing fields", {
+        description: "Please enter both starting point and destination.",
+      });
+      return;
+    }
+    console.log('Navigating to chat page with:', startingPoint, 'to:', destination);
+    // Pass startingPoint and destination via route state
+    navigate('/chat', { state: { startingPoint, destination } });
   };
 
   return (
