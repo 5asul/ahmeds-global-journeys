@@ -12,7 +12,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; // Assuming you have DropdownMenu
+} from "@/components/ui/dropdown-menu";
+import { supabase } from '@/integrations/supabase/client'; // Added this import
 
 const Navbar = () => {
   const { user, profile, signOut, loading: authLoading } = useAuth();
@@ -20,14 +21,13 @@ const Navbar = () => {
 
   const getAvatarPublicUrl = (avatarPath: string | null | undefined) => {
     if (!avatarPath) return null;
-    // Ensure this is the actual path in storage, not already a full URL
-    // If avatar_url in profiles stores the full public URL, this step is not needed.
-    // If it stores just the path, then construct the public URL.
-    // Based on current setup, avatar_url in profiles will store the path.
+    // If avatar_url from profiles table already stores the full public URL,
+    // this function might need adjustment. Assuming it stores the path.
     const { data } = supabase.storage.from('avatars').getPublicUrl(avatarPath);
     return data?.publicUrl || null;
   }
   
+  // Based on the useAuth hook, profile.avatar_url should contain the path.
   const avatarDisplayUrl = profile?.avatar_url ? getAvatarPublicUrl(profile.avatar_url) : null;
 
   return (
