@@ -8,18 +8,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Assuming you have Tabs component
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast as sonnerToast } from "sonner";
 import Logo from '@/components/Logo';
 
 const AuthPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPath, setAvatarPath] = useState<string | null>(null);
+  const [authActionLoading, setAuthActionLoading] = useState(false); // Renamed from 'loading' to avoid conflict
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   
-  const { session, user, loading: authLoading } = useAuth();
+  const { session, user, loading: authHookLoading } = useAuth(); // Renamed from 'authLoading'
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -28,32 +27,52 @@ const AuthPage = () => {
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
 
   useEffect(() => {
-    if (!authLoading && session) {
-      navigate('/'); // Redirect if already logged in
+    if (!authHookLoading && session) {
+      navigate('/'); 
     }
-  }, [session, authLoading, navigate]);
+  }, [session, authHookLoading, navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setAuthActionLoading(true);
 
     try {
       if (mode === 'signup') {
-        const { data: { user: newUser, session: newSession }, error } = await supabase.auth.signUp({
+        const { data: { user: newUser }, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
-        if (newUser && avatarPath) {
-          // Update profile with avatar_url (path, not public URL)
+        
+        let uploadedAvatarPath: string | null = null;
+        if (newUser && selectedAvatarFile) {
+          // Upload avatar if one was selected
+          const fileExt = selectedAvatarFile.name.split('.').pop();
+          const fileName = `${newUser.id}-${Math.random()}.${fileExt}`;
+          const filePath = `${fileName}`;
+
+          sonnerToast.info("Uploading avatar...");
+          const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(filePath, selectedAvatarFile);
+
+          if (uploadError) {
+            throw new Error(`Avatar upload failed: ${uploadError.message}`);
+          }
+          uploadedAvatarPath = filePath;
+          sonnerToast.success("Avatar uploaded!");
+
+          // Update profile with avatar_url (path)
           const { error: profileError } = await supabase
             .from('profiles')
-            .update({ avatar_url: avatarPath })
+            .update({ avatar_url: uploadedAvatarPath })
             .eq('id', newUser.id);
-          if (profileError) throw profileError;
+          if (profileError) {
+             throw new Error(`Profile update failed: ${profileError.message}`);
+          }
         }
         sonnerToast.success("Sign up successful!", { description: "Please check your email to verify your account." });
-        // Supabase onAuthStateChange will handle redirect via useAuth hook or navigate('/');
+        // onAuthStateChange in useAuth will handle navigation or state update
       } else { // signin
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -61,7 +80,7 @@ const AuthPage = () => {
         });
         if (error) throw error;
         sonnerToast.success("Sign in successful!");
-        // Supabase onAuthStateChange will handle redirect via useAuth hook or navigate('/');
+        // onAuthStateChange in useAuth will handle navigation or state update
       }
     } catch (error: any) {
       console.error(`${mode} error:`, error);
@@ -69,15 +88,15 @@ const AuthPage = () => {
         description: error.message || "An unexpected error occurred.",
       });
     } finally {
-      setLoading(false);
+      setAuthActionLoading(false);
     }
   };
   
-  const handleAvatarUploaded = (filePath: string) => {
-    setAvatarPath(filePath); // Store the file path from Supabase storage
+  const handleAvatarFileSelected = (file: File | null) => {
+    setSelectedAvatarFile(file);
   };
 
-  if (authLoading) {
+  if (authHookLoading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
   }
 
@@ -109,8 +128,8 @@ const AuthPage = () => {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button type="submit" className="w-full btn-primary-custom" disabled={loading}>
-                  {loading ? 'Signing In...' : 'Sign In'}
+                <Button type="submit" className="w-full btn-primary-custom" disabled={authActionLoading}>
+                  {authActionLoading ? 'Signing In...' : 'Sign In'}
                 </Button>
               </CardFooter>
             </form>
@@ -124,17 +143,11 @@ const AuthPage = () => {
             </CardHeader>
             <form onSubmit={handleAuth}>
               <CardContent className="space-y-4">
-                {/* For new sign-ups, user ID isn't known until after sign-up. 
-                    Avatar can be uploaded after sign-up or use a placeholder and update later.
-                    For simplicity, we'll allow upload and associate it post-signup if user is created.
-                    This means the AvatarUpload component's userId prop will be undefined initially.
-                    A more robust flow might involve a multi-step signup.
-                */}
                 <AvatarUpload 
-                  userId={user?.id} /* This will be undefined for new signups until after auth.signUp. Better to handle post-signup. */
                   initialAvatarUrl={null} 
-                  onUpload={handleAvatarUploaded} 
+                  onFileSelected={handleAvatarFileSelected} 
                   size={120}
+                  // userId is intentionally not passed for signup mode before user creation
                 />
                 <div className="space-y-1">
                   <Label htmlFor="email-signup">Email</Label>
@@ -146,8 +159,8 @@ const AuthPage = () => {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button type="submit" className="w-full btn-primary-custom" disabled={loading}>
-                  {loading ? 'Signing Up...' : 'Sign Up'}
+                <Button type="submit" className="w-full btn-primary-custom" disabled={authActionLoading}>
+                  {authActionLoading ? 'Signing Up...' : 'Sign Up'}
                 </Button>
               </CardFooter>
             </form>

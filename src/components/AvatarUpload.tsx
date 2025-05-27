@@ -9,80 +9,100 @@ import { UploadCloud, User as UserIcon } from 'lucide-react';
 import { toast as sonnerToast } from "sonner";
 
 interface AvatarUploadProps {
-  userId: string | undefined;
-  initialAvatarUrl: string | null;
-  onUpload: (filePath: string) => void;
+  userId?: string | undefined; // User ID for direct upload mode
+  initialAvatarUrl: string | null; // Existing avatar URL to display
+  onUpload?: (filePath: string) => void; // Callback with file path after direct upload
+  onFileSelected?: (file: File | null) => void; // Callback with selected file for deferred upload
   size?: number;
 }
 
-const AvatarUpload: React.FC<AvatarUploadProps> = ({ userId, initialAvatarUrl, onUpload, size = 150 }) => {
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
+const AvatarUpload: React.FC<AvatarUploadProps> = ({ userId, initialAvatarUrl, onUpload, onFileSelected, size = 150 }) => {
+  const [displayUrl, setDisplayUrl] = useState<string | null>(initialAvatarUrl);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    setAvatarUrl(initialAvatarUrl);
-  }, [initialAvatarUrl]);
+    // Handles previewing selected file or showing initial avatar
+    if (selectedFile) {
+      const objectUrl = URL.createObjectURL(selectedFile);
+      setDisplayUrl(objectUrl);
+      // Cleanup object URL when component unmounts or selectedFile/initialAvatarUrl changes
+      return () => URL.revokeObjectURL(objectUrl);
+    } else if (initialAvatarUrl) {
+      setDisplayUrl(initialAvatarUrl);
+    } else {
+      setDisplayUrl(null);
+    }
+  }, [selectedFile, initialAvatarUrl]);
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!userId) {
-      sonnerToast.error("User not identified. Cannot upload avatar.");
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      setSelectedFile(null);
+      if (onFileSelected) {
+        onFileSelected(null);
+      }
+      event.target.value = ''; // Reset file input
       return;
     }
-    try {
+
+    const file = files[0];
+    setSelectedFile(file); // Triggers useEffect for preview
+
+    if (userId && onUpload) {
+      // Direct upload mode: User ID is available, and onUpload callback is provided
       setUploading(true);
-      if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('You must select an image to upload.');
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${userId}-${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+        
+        onUpload(filePath); // Pass the storage path
+        sonnerToast.success("Avatar updated successfully!");
+      } catch (error: any) {
+        sonnerToast.error("Error uploading avatar", { description: error.message });
+        setSelectedFile(null); // Clear selection on error
+        event.target.value = ''; // Reset file input
+      } finally {
+        setUploading(false);
       }
-
-      const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userId}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Get public URL (assuming bucket is public or RLS allows access)
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      
-      setAvatarUrl(publicUrl);
-      onUpload(filePath); // Pass the path, not the public URL, for DB storage
-      sonnerToast.success("Avatar updated successfully!");
-
-    } catch (error: any) {
-      sonnerToast.error("Error uploading avatar", { description: error.message });
-    } finally {
-      setUploading(false);
+    } else if (onFileSelected) {
+      // Deferred upload mode: Pass the selected file to parent
+      onFileSelected(file);
     }
   };
 
   return (
     <div className="flex flex-col items-center space-y-4">
       <Avatar style={{ height: size, width: size }}>
-        <AvatarImage src={avatarUrl || undefined} alt="User avatar" />
+        <AvatarImage src={displayUrl || undefined} alt="User avatar" />
         <AvatarFallback style={{ height: size, width: size }}>
           <UserIcon style={{ height: size / 2, width: size / 2 }} className="text-gray-400" />
         </AvatarFallback>
       </Avatar>
       <div>
-        <Label htmlFor="avatar-upload" className="cursor-pointer">
+        <Label htmlFor={`avatar-upload-${userId || 'new'}`} className="cursor-pointer">
           <Button variant="outline" asChild>
             <span>
-              <UploadCloud className="mr-2 h-4 w-4" /> {uploading ? 'Uploading...' : 'Upload Avatar'}
+              <UploadCloud className="mr-2 h-4 w-4" /> 
+              {uploading ? 'Processing...' : (userId && onUpload ? 'Change Avatar' : 'Select Avatar')}
             </span>
           </Button>
         </Label>
         <Input
-          id="avatar-upload"
+          id={`avatar-upload-${userId || 'new'}`} // Ensure unique ID if multiple instances
           type="file"
           accept="image/*"
-          onChange={handleUpload}
-          disabled={uploading || !userId}
+          onChange={handleFileChange}
+          disabled={uploading} // Only disable when actively processing
           className="hidden"
         />
       </div>
