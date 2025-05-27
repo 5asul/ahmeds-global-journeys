@@ -4,8 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, Loader2 } from 'lucide-react';
-import { toast as sonnerToast } from "sonner"; // Using sonner for notifications
+import { Send, Bot, User, Loader2, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
+import { toast as sonnerToast } from "sonner";
 
 interface Message {
   id: string;
@@ -21,17 +21,50 @@ const ChatPage = () => {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState('');
-  const [isLoadingPlan, setIsLoadingPlan] = useState(false);
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isLoadingPlan, setIsLoadingPlan] = useState(false); // For initial plan
+  const [isSendingMessage, setIsSendingMessage] = useState(false); // For subsequent messages
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const parseWebhookResponse = async (response: Response): Promise<string> => {
+    let responseText = "Sorry, I couldn't understand the response from the travel guide.";
+    try {
+      // Clone the response before attempting to read its body
+      const clonedResponse = response.clone();
+      const responseData = await clonedResponse.json();
+      if (Array.isArray(responseData) && responseData.length > 0 && responseData[0].output) {
+        responseText = responseData[0].output;
+      } else if (responseData.message) {
+        responseText = responseData.message;
+      } else if (responseData.plan) {
+        responseText = responseData.plan;
+      } else if (Object.keys(responseData).length > 0) {
+        responseText = JSON.stringify(responseData);
+      } else {
+        // If JSON is empty or not matching known structures, try text
+        const textData = await response.text();
+        responseText = textData || "Received an empty response from the travel guide.";
+      }
+    } catch (e) {
+      console.warn("Failed to parse JSON, trying text. Error:", e);
+      try {
+        // If JSON parsing fails, try to read the original response as text
+        const textData = await response.text();
+        responseText = textData || "Received an unreadable response from the travel guide.";
+      } catch (textError) {
+        console.error("Failed to read response as text:", textError);
+        responseText = "Failed to process the response from the travel guide.";
+      }
+    }
+    return responseText;
+  };
 
   useEffect(() => {
     if (!startingPoint || !destination) {
       sonnerToast.error("Missing trip details. Redirecting...", {
         description: "Please go back and enter a starting point and destination.",
       });
-      navigate('/'); // Redirect to home if no state is passed
+      navigate('/');
       return;
     }
 
@@ -43,34 +76,16 @@ const ChatPage = () => {
       try {
         const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook-test/ahmedDiscoversTheWorld', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ startingPoint, destination }),
         });
 
         if (!response.ok) {
-          const errorData = await response.text();
-          throw new Error(`Webhook failed: ${response.status} ${errorData || response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(`Webhook failed: ${response.status} ${errorText || response.statusText}`);
         }
-
-        // Assuming the webhook returns the plan directly as text or a JSON object with a 'plan' or 'message' field
-        let planText = "Received an empty plan. Try asking something else!";
-        try {
-            const planData = await response.json();
-            planText = planData.plan || planData.message || JSON.stringify(planData); // Adapt based on actual webhook response
-        } catch (e) {
-            // If response is not JSON, try to read as text
-            const textResponse = await response.text(); // This might re-read if json() failed. Be careful.
-            planText = textResponse || planText;
-            if (!textResponse && !(e instanceof SyntaxError)) { // if response.text() was already consumed or empty
-                // re-fetch might be an option or handle the error more gracefully
-                console.warn("Could not parse JSON and text response was empty or already consumed.");
-            } else if (!textResponse) {
-                 planText = "Received an empty plan. Try asking something else!";
-            }
-        }
-
+        
+        const planText = await parseWebhookResponse(response);
 
         setMessages(prevMessages => [
           ...prevMessages,
@@ -102,7 +117,7 @@ const ChatPage = () => {
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!userInput.trim()) return;
+    if (!userInput.trim() || !startingPoint || !destination) return;
 
     const newUserMessage: Message = {
       id: Date.now().toString(),
@@ -111,24 +126,54 @@ const ChatPage = () => {
       timestamp: new Date(),
     };
     setMessages(prevMessages => [...prevMessages, newUserMessage]);
+    const currentMessage = userInput;
     setUserInput('');
-    setIsSendingMessage(true); // For subsequent messages if backend supports it
+    setIsSendingMessage(true);
 
-    // Placeholder for sending user message to backend and getting a response
-    // For now, we'll just simulate a bot thinking and then saying it's not fully implemented
-    setTimeout(() => {
+    try {
+      console.log('Sending message to n8n:', { message: currentMessage, startingPoint, destination });
+      const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook-test/ahmedDiscoversTheWorld', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Send user input along with original start/dest for context
+        body: JSON.stringify({ message: currentMessage, startingPoint, destination }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Webhook failed: ${response.status} ${errorText || response.statusText}`);
+      }
+
+      const botResponseText = await parseWebhookResponse(response);
+
       setMessages(prevMessages => [
         ...prevMessages,
-        { id: (Date.now() + 1).toString(), text: "I've received your message! Further interaction is under development.", sender: 'bot', timestamp: new Date() },
+        { id: (Date.now() + 1).toString(), text: botResponseText, sender: 'bot', timestamp: new Date() },
       ]);
+      sonnerToast.info("Ahmed responded!");
+
+    } catch (error) {
+      console.error('Failed to send message or get response:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred while sending message.';
+      setMessages(prevMessages => [
+        ...prevMessages,
+        { id: (Date.now() + 1).toString(), text: `Sorry, I couldn't get a response. ${errorMessage}`, sender: 'bot', timestamp: new Date() },
+      ]);
+      sonnerToast.error("Message failed", { description: errorMessage });
+    } finally {
       setIsSendingMessage(false);
-    }, 1500);
+    }
   };
 
   return (
     <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900">
-      <header className="bg-primary text-primary-foreground p-4 shadow-md">
-        <h1 className="text-xl font-semibold text-center font-poppins">Ahmed’s Travel Guide Bot</h1>
+      <header className="bg-primary text-primary-foreground p-4 shadow-md flex items-center justify-between">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="text-primary-foreground hover:bg-primary/80">
+          <ArrowLeft className="h-6 w-6" />
+          <span className="sr-only">Back to Home</span>
+        </Button>
+        <h1 className="text-xl font-semibold text-center font-poppins flex-grow">Ahmed’s Travel Guide Bot</h1>
+        <div className="w-10"></div> {/* Spacer to balance the back button */}
       </header>
 
       <ScrollArea className="flex-grow p-4 sm:p-6" ref={scrollAreaRef}>
@@ -156,7 +201,7 @@ const ChatPage = () => {
               </div>
             </div>
           ))}
-          {isLoadingPlan && (
+          {isLoadingPlan && messages.length <= 1 && ( // Show initial loading only if it's truly the first plan
             <div className="flex justify-center items-center py-4">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2 text-muted-foreground">Generating your adventure...</p>
@@ -193,4 +238,3 @@ const ChatPage = () => {
 };
 
 export default ChatPage;
-
