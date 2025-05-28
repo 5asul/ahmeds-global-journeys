@@ -3,14 +3,16 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import AvatarUpload from '@/components/AvatarUpload';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+// import AvatarUpload from '@/components/AvatarUpload'; // No longer directly used here
+// import { Button } from '@/components/ui/button'; // No longer directly used here for forms
+// import { Input } from '@/components/ui/input'; // No longer directly used here for forms
+// import { Label } from '@/components/ui/label'; // No longer directly used here for forms
+// import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'; // No longer directly used here for forms
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast as sonnerToast } from "sonner";
 import Logo from '@/components/Logo';
+import SignInForm from '@/components/auth/SignInForm';
+import SignUpForm from '@/components/auth/SignUpForm';
 
 const AuthPage = () => {
   const [email, setEmail] = useState('');
@@ -19,7 +21,7 @@ const AuthPage = () => {
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   
-  const { session, user, loading: authHookLoading } = useAuth();
+  const { session, loading: authHookLoading } = useAuth(); // Removed 'user' as it's not directly used in this component's logic after refactor
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -51,57 +53,54 @@ const AuthPage = () => {
           return;
         }
 
-        // 1. Upload avatar if selected, BEFORE signUp
         if (selectedAvatarFile) {
           sonnerToast.info("Uploading avatar...");
           const fileExt = selectedAvatarFile.name.split('.').pop();
-          // Using a temp user ID or random string for pre-signup upload.
-          // The actual user ID isn't available yet.
-          // The RLS policies on the 'avatars' bucket must allow authenticated users to upload.
-          // Or, if using a server-side function for upload, it would handle auth.
-          // For client-side, ensure bucket policies are appropriate.
-          // A common pattern is to upload to a path like `public/temp_avatars/${random_string}.${fileExt}`
-          // and then move/associate it after user creation, or ensure the `handle_new_user` trigger
-          // can use this path.
-          // For simplicity here, we'll assume 'avatars' bucket RLS allows inserts by authenticated role (even if user is "new")
-          // Or the bucket is public for uploads (less secure for user-specific avatars unless paths are unguessable).
-          // Let's construct a unique path using user's email (url-safe) and timestamp.
           const safeEmailPart = email.replace(/[^a-zA-Z0-9]/g, '_');
           const fileName = `${safeEmailPart}-${Date.now()}.${fileExt}`;
-          const filePath = `public/${fileName}`; // Ensure this matches bucket structure if 'public' is a folder
+          // The 'public/' prefix indicates the avatar is publicly accessible via URL once uploaded.
+          // Ensure your 'avatars' bucket is configured for public reads or uses signed URLs if private.
+          // For this setup, 'public/' assumes the bucket 'avatars' itself, or a folder named 'public' within it, is publicly readable.
+          const filePath = `public/${fileName}`; 
 
           const { error: uploadError } = await supabase.storage
             .from('avatars')
             .upload(filePath, selectedAvatarFile, {
               cacheControl: '3600',
-              upsert: false, // Use false to avoid overwriting if somehow a name collides pre-signup
+              upsert: false, 
             });
 
           if (uploadError) {
             console.error("Supabase storage upload error (pre-signup):", uploadError);
-            throw new Error(`Avatar upload failed: ${uploadError.message}`);
+            // Check for RLS error specifically.
+            if (uploadError.message.includes("row-level security") || uploadError.message.includes("policy")) {
+                sonnerToast.error("Avatar upload failed due to permission issues.", {
+                    description: "Please ensure RLS policies on the 'avatars' bucket allow uploads or contact support. For now, signup will proceed without an avatar.",
+                });
+                // Optionally, allow signup without avatar or block it. Here we proceed without.
+                avatarPathForSignup = null; 
+            } else {
+                throw new Error(`Avatar upload failed: ${uploadError.message}`);
+            }
+          } else {
+            avatarPathForSignup = filePath; 
+            sonnerToast.success("Avatar pre-uploaded!");
           }
-          avatarPathForSignup = filePath; // Store the path to pass to signUp
-          sonnerToast.success("Avatar pre-uploaded!");
         }
 
-        // 2. Call signUp with username and avatar_url (if available) in options.data
-        const { data: { user: newUser }, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               username: username.trim(),
-              avatar_url: avatarPathForSignup, // Pass the uploaded avatar path here
+              avatar_url: avatarPathForSignup, 
             }
           }
         });
 
         if (error) throw error;
         
-        // The handle_new_user trigger in Supabase will now use avatar_url from options.data
-        // to populate the profiles table. No need for a separate profile update call here.
-
         sonnerToast.success("Sign up successful!", { description: "Please check your email to verify your account." });
 
       } else { // signin
@@ -111,7 +110,12 @@ const AuthPage = () => {
         });
         if (error) throw error;
         sonnerToast.success("Sign in successful!");
+        // Navigation to '/' will be handled by the useEffect watching `session`
       }
+      // Reset form fields on successful auth action, except for mode switch
+      // For a better UX, fields are usually cleared or user is navigated away.
+      // Since navigation is handled by useEffect, we can clear fields here if desired.
+      // setEmail(''); setPassword(''); setUsername(''); setSelectedAvatarFile(null);
     } catch (error: any) {
       console.error(`${mode} error:`, error);
       sonnerToast.error(`${mode === 'signup' ? 'Sign-up' : 'Sign-in'} failed`, {
@@ -136,80 +140,48 @@ const AuthPage = () => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 p-4 selection:bg-primary/20 selection:text-primary">
-      <div className="absolute top-8"> {/* Logo positioned at the top */}
+      <div className="absolute top-8">
         <Logo />
       </div>
       
-      <Tabs value={mode} onValueChange={(value) => setMode(value as 'signin' | 'signup')} className="w-full max-w-md mt-24 sm:mt-28 md:mt-32"> {/* Added margin-top to account for fixed Logo */}
+      <Tabs 
+        value={mode} 
+        onValueChange={(value) => {
+          setMode(value as 'signin' | 'signup');
+          // Reset fields when switching modes for a cleaner UX
+          setEmail('');
+          setPassword('');
+          setUsername('');
+          setSelectedAvatarFile(null);
+        }} 
+        className="w-full max-w-md mt-24 sm:mt-28 md:mt-32"
+      >
         <TabsList className="grid w-full grid-cols-2 bg-slate-200/80">
           <TabsTrigger value="signin" className="data-[state=active]:bg-white data-[state=active]:shadow-md">Sign In</TabsTrigger>
           <TabsTrigger value="signup" className="data-[state=active]:bg-white data-[state=active]:shadow-md">Sign Up</TabsTrigger>
         </TabsList>
         <TabsContent value="signin">
-          <Card className="shadow-xl border-slate-200/80">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-poppins text-slate-700">Welcome Back!</CardTitle>
-              <CardDescription className="text-slate-500">Access your account to plan your adventures.</CardDescription>
-            </CardHeader>
-            <form onSubmit={handleAuth}>
-              <CardContent className="space-y-6 pt-2 pb-6 px-6">
-                <div className="space-y-2">
-                  <Label htmlFor="email-signin" className="text-slate-600 font-medium">Email</Label>
-                  <Input id="email-signin" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required 
-                         className="text-base focus:border-primary focus:ring-primary/50"/>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-signin" className="text-slate-600 font-medium">Password</Label>
-                  <Input id="password-signin" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required 
-                         className="text-base focus:border-primary focus:ring-primary/50"/>
-                </div>
-              </CardContent>
-              <CardFooter className="px-6 pb-6">
-                <Button type="submit" className="w-full btn-primary-custom py-3 text-base font-semibold" disabled={authActionLoading}>
-                  {authActionLoading && mode === 'signin' ? 'Signing In...' : 'Sign In'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
+          <SignInForm 
+            email={email}
+            setEmail={setEmail}
+            password={password}
+            setPassword={setPassword}
+            handleAuth={handleAuth}
+            loading={authActionLoading && mode === 'signin'}
+          />
         </TabsContent>
         <TabsContent value="signup">
-          <Card className="shadow-xl border-slate-200/80">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-poppins text-slate-700">Create Your Account</CardTitle>
-              <CardDescription className="text-slate-500">Join us to start discovering new horizons.</CardDescription>
-            </CardHeader>
-            <form onSubmit={handleAuth}>
-              <CardContent className="space-y-6 pt-2 pb-6 px-6">
-                <div className="flex justify-center">
-                  <AvatarUpload 
-                    initialAvatarUrl={null} 
-                    onFileSelected={handleAvatarFileSelected} 
-                    size={100}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="username-signup" className="text-slate-600 font-medium">Username</Label>
-                  <Input id="username-signup" type="text" placeholder="Choose a unique username" value={username} onChange={(e) => setUsername(e.target.value)} required 
-                         className="text-base focus:border-primary focus:ring-primary/50"/>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email-signup" className="text-slate-600 font-medium">Email</Label>
-                  <Input id="email-signup" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required 
-                         className="text-base focus:border-primary focus:ring-primary/50"/>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-signup" className="text-slate-600 font-medium">Password</Label>
-                  <Input id="password-signup" type="password" placeholder="Choose a strong password" value={password} onChange={(e) => setPassword(e.target.value)} required 
-                         className="text-base focus:border-primary focus:ring-primary/50"/>
-                </div>
-              </CardContent>
-              <CardFooter className="px-6 pb-6">
-                <Button type="submit" className="w-full btn-primary-custom py-3 text-base font-semibold" disabled={authActionLoading}>
-                  {authActionLoading && mode === 'signup' ? 'Creating Account...' : 'Sign Up'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
+          <SignUpForm
+            username={username}
+            setUsername={setUsername}
+            email={email}
+            setEmail={setEmail}
+            password={password}
+            setPassword={setPassword}
+            handleAuth={handleAuth}
+            loading={authActionLoading && mode === 'signup'}
+            onAvatarFileSelected={handleAvatarFileSelected}
+          />
         </TabsContent>
       </Tabs>
        <p className="mt-8 text-xs text-slate-500 text-center max-w-md">
