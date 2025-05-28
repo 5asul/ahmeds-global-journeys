@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
@@ -7,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 export interface Profile {
   id: string;
   avatar_url: string | null;
+  username: string | null;
   updated_at: string;
 }
 
@@ -22,7 +22,7 @@ export const useAuth = () => {
     try {
       const { data, error, status } = await supabase
         .from('profiles')
-        .select(`id, avatar_url, updated_at`)
+        .select(`id, avatar_url, username, updated_at`)
         .eq('id', userId)
         .single();
 
