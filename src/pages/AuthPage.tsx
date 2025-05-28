@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,7 +15,7 @@ import Logo from '@/components/Logo';
 const AuthPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState(''); // Added username state
+  const [username, setUsername] = useState('');
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   
@@ -35,10 +36,10 @@ const AuthPage = () => {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthActionLoading(true);
+    let avatarPathForSignup: string | null = null;
 
     try {
       if (mode === 'signup') {
-        // Input validation for username (basic example)
         if (!username.trim()) {
           sonnerToast.error("Username is required.");
           setAuthActionLoading(false);
@@ -50,57 +51,59 @@ const AuthPage = () => {
           return;
         }
 
+        // 1. Upload avatar if selected, BEFORE signUp
+        if (selectedAvatarFile) {
+          sonnerToast.info("Uploading avatar...");
+          const fileExt = selectedAvatarFile.name.split('.').pop();
+          // Using a temp user ID or random string for pre-signup upload.
+          // The actual user ID isn't available yet.
+          // The RLS policies on the 'avatars' bucket must allow authenticated users to upload.
+          // Or, if using a server-side function for upload, it would handle auth.
+          // For client-side, ensure bucket policies are appropriate.
+          // A common pattern is to upload to a path like `public/temp_avatars/${random_string}.${fileExt}`
+          // and then move/associate it after user creation, or ensure the `handle_new_user` trigger
+          // can use this path.
+          // For simplicity here, we'll assume 'avatars' bucket RLS allows inserts by authenticated role (even if user is "new")
+          // Or the bucket is public for uploads (less secure for user-specific avatars unless paths are unguessable).
+          // Let's construct a unique path using user's email (url-safe) and timestamp.
+          const safeEmailPart = email.replace(/[^a-zA-Z0-9]/g, '_');
+          const fileName = `${safeEmailPart}-${Date.now()}.${fileExt}`;
+          const filePath = `public/${fileName}`; // Ensure this matches bucket structure if 'public' is a folder
+
+          const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(filePath, selectedAvatarFile, {
+              cacheControl: '3600',
+              upsert: false, // Use false to avoid overwriting if somehow a name collides pre-signup
+            });
+
+          if (uploadError) {
+            console.error("Supabase storage upload error (pre-signup):", uploadError);
+            throw new Error(`Avatar upload failed: ${uploadError.message}`);
+          }
+          avatarPathForSignup = filePath; // Store the path to pass to signUp
+          sonnerToast.success("Avatar pre-uploaded!");
+        }
+
+        // 2. Call signUp with username and avatar_url (if available) in options.data
         const { data: { user: newUser }, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               username: username.trim(),
-              // avatar_url will be set by the handle_new_user trigger if passed,
-              // or updated below if an avatar is selected.
+              avatar_url: avatarPathForSignup, // Pass the uploaded avatar path here
             }
           }
         });
 
         if (error) throw error;
         
-        // Avatar upload logic (remains largely the same, RLS policies should allow update now)
-        if (newUser && selectedAvatarFile) {
-          sonnerToast.info("Uploading avatar...");
-          const fileExt = selectedAvatarFile.name.split('.').pop();
-          // Use a more robust way to generate a unique file name if needed,
-          // but newUser.id should be sufficiently unique.
-          const fileName = `${newUser.id}.${fileExt}`; 
-          const filePath = `public/${fileName}`; // Ensure this matches bucket structure if 'public' is a folder
+        // The handle_new_user trigger in Supabase will now use avatar_url from options.data
+        // to populate the profiles table. No need for a separate profile update call here.
 
-          const { error: uploadError } = await supabase.storage
-            .from('avatars') // Ensure this is the correct bucket name
-            .upload(filePath, selectedAvatarFile, {
-              cacheControl: '3600',
-              upsert: true, // Overwrite if file with same name exists for this user
-            });
-
-          if (uploadError) {
-            // Log specific Supabase storage error
-            console.error("Supabase storage upload error:", uploadError);
-            throw new Error(`Avatar upload failed: ${uploadError.message}`);
-          }
-          sonnerToast.success("Avatar uploaded!");
-
-          // Update profile with avatar_url (path)
-          // The handle_new_user trigger might have already created the profile.
-          // This update ensures avatar_url is set if an avatar was uploaded.
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({ avatar_url: filePath }) // Store the path
-            .eq('id', newUser.id);
-
-          if (profileError) {
-             console.error("Supabase profile update error:", profileError);
-             throw new Error(`Profile update for avatar failed: ${profileError.message}`);
-          }
-        }
         sonnerToast.success("Sign up successful!", { description: "Please check your email to verify your account." });
+
       } else { // signin
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -124,36 +127,45 @@ const AuthPage = () => {
   };
 
   if (authHookLoading) {
-    return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-slate-50">
+        <div className="animate-pulse text-lg font-semibold text-primary">Loading Adventure...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-100 to-sky-100 p-4 pt-16 sm:pt-8 space-y-6 sm:space-y-8"> {/* Added pt and space-y */}
-      <Logo /> {/* Logo moved here, will be centered by parent's items-center */}
-      <Tabs value={mode} onValueChange={(value) => setMode(value as 'signin' | 'signup')} className="w-full max-w-md">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="signin">Sign In</TabsTrigger>
-          <TabsTrigger value="signup">Sign Up</TabsTrigger>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-100 via-sky-50 to-blue-100 p-4 selection:bg-primary/20 selection:text-primary">
+      <div className="absolute top-8"> {/* Logo positioned at the top */}
+        <Logo />
+      </div>
+      
+      <Tabs value={mode} onValueChange={(value) => setMode(value as 'signin' | 'signup')} className="w-full max-w-md mt-24 sm:mt-28 md:mt-32"> {/* Added margin-top to account for fixed Logo */}
+        <TabsList className="grid w-full grid-cols-2 bg-slate-200/80">
+          <TabsTrigger value="signin" className="data-[state=active]:bg-white data-[state=active]:shadow-md">Sign In</TabsTrigger>
+          <TabsTrigger value="signup" className="data-[state=active]:bg-white data-[state=active]:shadow-md">Sign Up</TabsTrigger>
         </TabsList>
         <TabsContent value="signin">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign In</CardTitle>
-              <CardDescription>Access your account to plan your adventures.</CardDescription>
+          <Card className="shadow-xl border-slate-200/80">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl font-poppins text-slate-700">Welcome Back!</CardTitle>
+              <CardDescription className="text-slate-500">Access your account to plan your adventures.</CardDescription>
             </CardHeader>
             <form onSubmit={handleAuth}>
-              <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <Label htmlFor="email-signin">Email</Label>
-                  <Input id="email-signin" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <CardContent className="space-y-6 pt-2 pb-6 px-6">
+                <div className="space-y-2">
+                  <Label htmlFor="email-signin" className="text-slate-600 font-medium">Email</Label>
+                  <Input id="email-signin" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required 
+                         className="text-base focus:border-primary focus:ring-primary/50"/>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="password-signin">Password</Label>
-                  <Input id="password-signin" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <div className="space-y-2">
+                  <Label htmlFor="password-signin" className="text-slate-600 font-medium">Password</Label>
+                  <Input id="password-signin" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required 
+                         className="text-base focus:border-primary focus:ring-primary/50"/>
                 </div>
               </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full btn-primary-custom" disabled={authActionLoading}>
+              <CardFooter className="px-6 pb-6">
+                <Button type="submit" className="w-full btn-primary-custom py-3 text-base font-semibold" disabled={authActionLoading}>
                   {authActionLoading && mode === 'signin' ? 'Signing In...' : 'Sign In'}
                 </Button>
               </CardFooter>
@@ -161,42 +173,47 @@ const AuthPage = () => {
           </Card>
         </TabsContent>
         <TabsContent value="signup">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign Up</CardTitle>
-              <CardDescription>Create an account to start discovering.</CardDescription>
+          <Card className="shadow-xl border-slate-200/80">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl font-poppins text-slate-700">Create Your Account</CardTitle>
+              <CardDescription className="text-slate-500">Join us to start discovering new horizons.</CardDescription>
             </CardHeader>
             <form onSubmit={handleAuth}>
-              <CardContent className="space-y-4">
-                <AvatarUpload 
-                  initialAvatarUrl={null} 
-                  onFileSelected={handleAvatarFileSelected} 
-                  size={100} // Slightly smaller for better fit
-                />
-                <div className="space-y-1">
-                  <Label htmlFor="username-signup">Username</Label> {/* Added Username Input */}
-                  <Input id="username-signup" type="text" placeholder="Choose a username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+              <CardContent className="space-y-6 pt-2 pb-6 px-6">
+                <div className="flex justify-center">
+                  <AvatarUpload 
+                    initialAvatarUrl={null} 
+                    onFileSelected={handleAvatarFileSelected} 
+                    size={100}
+                  />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="email-signup">Email</Label>
-                  <Input id="email-signup" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <div className="space-y-2">
+                  <Label htmlFor="username-signup" className="text-slate-600 font-medium">Username</Label>
+                  <Input id="username-signup" type="text" placeholder="Choose a unique username" value={username} onChange={(e) => setUsername(e.target.value)} required 
+                         className="text-base focus:border-primary focus:ring-primary/50"/>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="password-signup">Password</Label>
-                  <Input id="password-signup" type="password" placeholder="Choose a strong password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <div className="space-y-2">
+                  <Label htmlFor="email-signup" className="text-slate-600 font-medium">Email</Label>
+                  <Input id="email-signup" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required 
+                         className="text-base focus:border-primary focus:ring-primary/50"/>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password-signup" className="text-slate-600 font-medium">Password</Label>
+                  <Input id="password-signup" type="password" placeholder="Choose a strong password" value={password} onChange={(e) => setPassword(e.target.value)} required 
+                         className="text-base focus:border-primary focus:ring-primary/50"/>
                 </div>
               </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full btn-primary-custom" disabled={authActionLoading}>
-                  {authActionLoading && mode === 'signup' ? 'Signing Up...' : 'Sign Up'}
+              <CardFooter className="px-6 pb-6">
+                <Button type="submit" className="w-full btn-primary-custom py-3 text-base font-semibold" disabled={authActionLoading}>
+                  {authActionLoading && mode === 'signup' ? 'Creating Account...' : 'Sign Up'}
                 </Button>
               </CardFooter>
             </form>
           </Card>
         </TabsContent>
       </Tabs>
-       <p className="mt-4 text-xs text-slate-500 text-center"> {/* Added text-center */}
-        Note: For development, you might want to disable "Confirm email" in your Supabase project's Auth settings to speed up testing.
+       <p className="mt-8 text-xs text-slate-500 text-center max-w-md">
+        Note: For smoother testing during development, you might consider disabling "Confirm email" in your Supabase project's Auth settings.
       </p>
     </div>
   );
