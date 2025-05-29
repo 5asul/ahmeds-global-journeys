@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
@@ -71,10 +70,10 @@ const ChatPage = () => {
     const fetchInitialPlan = async () => {
       setIsLoadingPlan(true);
       setMessages([
-        { id: 'initial-bot-greeting', text: `Hello! I'm Ahmed’s Travel Guide Bot. Let me plan your adventure from ${startingPoint} to ${destination}...`, sender: 'bot', timestamp: new Date() }
+        { id: 'initial-bot-greeting', text: `Hello! I'm Ahmed's Travel Guide Bot. Let me plan your adventure from ${startingPoint} to ${destination}...`, sender: 'bot', timestamp: new Date() }
       ]);
       try {
-        const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook-test/ahmedDiscoversTheWorld', {
+        const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook/ahmedDiscoversTheWorld', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ startingPoint, destination }),
@@ -132,7 +131,7 @@ const ChatPage = () => {
 
     try {
       console.log('Sending message to n8n:', { message: currentMessage, startingPoint, destination });
-      const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook-test/ahmedDiscoversTheWorld', {
+      const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook/ahmedDiscoversTheWorld', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Send user input along with original start/dest for context
@@ -172,7 +171,7 @@ const ChatPage = () => {
           <ArrowLeft className="h-6 w-6" />
           <span className="sr-only">Back to Home</span>
         </Button>
-        <h1 className="text-xl font-semibold text-center font-poppins flex-grow">Ahmed’s Travel Guide Bot</h1>
+        <h1 className="text-xl font-semibold text-center font-poppins flex-grow">Ahmed's Travel Guide Bot</h1>
         <div className="w-10"></div> {/* Spacer to balance the back button */}
       </header>
 
