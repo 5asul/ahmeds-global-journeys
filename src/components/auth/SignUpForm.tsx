@@ -1,6 +1,5 @@
 
 import React from 'react';
-import AvatarUpload from '@/components/AvatarUpload';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +14,6 @@ interface SignUpFormProps {
   setPassword: (password: string) => void;
   handleAuth: (e: React.FormEvent) => Promise<void>;
   loading: boolean;
-  onAvatarFileSelected: (file: File | null) => void;
 }
 
 const SignUpForm: React.FC<SignUpFormProps> = ({
@@ -27,7 +25,6 @@ const SignUpForm: React.FC<SignUpFormProps> = ({
   setPassword,
   handleAuth,
   loading,
-  onAvatarFileSelected,
 }) => {
   return (
     <Card className="shadow-xl border-slate-200/80">
@@ -37,13 +34,6 @@ const SignUpForm: React.FC<SignUpFormProps> = ({
       </CardHeader>
       <form onSubmit={handleAuth}>
         <CardContent className="space-y-6 pt-2 pb-6 px-6">
-          <div className="flex justify-center">
-            <AvatarUpload 
-              initialAvatarUrl={null} 
-              onFileSelected={onAvatarFileSelected} 
-              size={100}
-            />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="username-signup" className="text-slate-600 font-medium">Username</Label>
             <Input 

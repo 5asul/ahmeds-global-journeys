@@ -14,7 +14,6 @@ const AuthPage = () => {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [authActionLoading, setAuthActionLoading] = useState(false);
-  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   
   const { session, loading: authHookLoading } = useAuth();
   const navigate = useNavigate();
@@ -33,7 +32,6 @@ const AuthPage = () => {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthActionLoading(true);
-    let avatarPathForSignup: string | null = null;
 
     try {
       if (mode === 'signup') {
@@ -48,51 +46,24 @@ const AuthPage = () => {
           return;
         }
 
-        if (selectedAvatarFile) {
-          sonnerToast.info("Uploading avatar...");
-          const fileExt = selectedAvatarFile.name.split('.').pop();
-          const safeEmailPart = email.replace(/[^a-zA-Z0-9]/g, '_');
-          const fileName = `${safeEmailPart}-${Date.now()}.${fileExt}`;
-          const filePath = `public/${fileName}`; 
-
-          const { error: uploadError } = await supabase.storage
-            .from('avatars')
-            .upload(filePath, selectedAvatarFile, {
-              cacheControl: '3600',
-              upsert: false, 
-            });
-
-          if (uploadError) {
-            console.error("Supabase storage upload error (pre-signup):", uploadError);
-            if (uploadError.message.includes("row-level security") || uploadError.message.includes("policy")) {
-                sonnerToast.error("Avatar upload failed due to permission issues.", {
-                    description: "Please ensure RLS policies on the 'avatars' bucket allow uploads or contact support. For now, signup will proceed without an avatar.",
-                });
-                avatarPathForSignup = null; 
-            } else {
-                throw new Error(`Avatar upload failed: ${uploadError.message}`);
-            }
-          } else {
-            avatarPathForSignup = filePath; 
-            sonnerToast.success("Avatar pre-uploaded!");
-          }
-        }
-
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               username: username.trim(),
-              avatar_url: avatarPathForSignup, 
-            },
-            emailRedirectTo: `${window.location.origin}/`
+            }
           }
         });
 
         if (error) throw error;
         
-        sonnerToast.success("Sign up successful!", { description: "Please check your email to verify your account." });
+        sonnerToast.success("Account created successfully!", { description: "You can now sign in with your credentials." });
+        
+        // Switch to sign in mode after successful signup
+        setMode('signin');
+        setPassword(''); // Clear password for security
+        setUsername(''); // Clear username
 
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -110,10 +81,6 @@ const AuthPage = () => {
     } finally {
       setAuthActionLoading(false);
     }
-  };
-  
-  const handleAvatarFileSelected = (file: File | null) => {
-    setSelectedAvatarFile(file);
   };
 
   if (authHookLoading) {
@@ -137,7 +104,6 @@ const AuthPage = () => {
           setEmail('');
           setPassword('');
           setUsername('');
-          setSelectedAvatarFile(null);
         }} 
         className="w-full max-w-md mt-24 sm:mt-28 md:mt-32"
       >
@@ -165,13 +131,9 @@ const AuthPage = () => {
             setPassword={setPassword}
             handleAuth={handleAuth}
             loading={authActionLoading && mode === 'signup'}
-            onAvatarFileSelected={handleAvatarFileSelected}
           />
         </TabsContent>
       </Tabs>
-       <p className="mt-8 text-xs text-slate-500 text-center max-w-md">
-        Note: For smoother testing during development, you might consider disabling "Confirm email" in your Supabase project's Auth settings.
-      </p>
     </div>
   );
 };
