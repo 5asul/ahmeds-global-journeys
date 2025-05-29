@@ -85,7 +85,8 @@ const AuthPage = () => {
             data: {
               username: username.trim(),
               avatar_url: avatarPathForSignup, 
-            }
+            },
+            emailRedirectTo: `${window.location.origin}/`
           }
         });
 
