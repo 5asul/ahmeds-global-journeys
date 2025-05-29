@@ -3,11 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-// import AvatarUpload from '@/components/AvatarUpload'; // No longer directly used here
-// import { Button } from '@/components/ui/button'; // No longer directly used here for forms
-// import { Input } from '@/components/ui/input'; // No longer directly used here for forms
-// import { Label } from '@/components/ui/label'; // No longer directly used here for forms
-// import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'; // No longer directly used here for forms
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast as sonnerToast } from "sonner";
 import Logo from '@/components/Logo';
@@ -21,7 +16,7 @@ const AuthPage = () => {
   const [authActionLoading, setAuthActionLoading] = useState(false);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   
-  const { session, loading: authHookLoading } = useAuth(); // Removed 'user' as it's not directly used in this component's logic after refactor
+  const { session, loading: authHookLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -58,9 +53,6 @@ const AuthPage = () => {
           const fileExt = selectedAvatarFile.name.split('.').pop();
           const safeEmailPart = email.replace(/[^a-zA-Z0-9]/g, '_');
           const fileName = `${safeEmailPart}-${Date.now()}.${fileExt}`;
-          // The 'public/' prefix indicates the avatar is publicly accessible via URL once uploaded.
-          // Ensure your 'avatars' bucket is configured for public reads or uses signed URLs if private.
-          // For this setup, 'public/' assumes the bucket 'avatars' itself, or a folder named 'public' within it, is publicly readable.
           const filePath = `public/${fileName}`; 
 
           const { error: uploadError } = await supabase.storage
@@ -72,12 +64,10 @@ const AuthPage = () => {
 
           if (uploadError) {
             console.error("Supabase storage upload error (pre-signup):", uploadError);
-            // Check for RLS error specifically.
             if (uploadError.message.includes("row-level security") || uploadError.message.includes("policy")) {
                 sonnerToast.error("Avatar upload failed due to permission issues.", {
                     description: "Please ensure RLS policies on the 'avatars' bucket allow uploads or contact support. For now, signup will proceed without an avatar.",
                 });
-                // Optionally, allow signup without avatar or block it. Here we proceed without.
                 avatarPathForSignup = null; 
             } else {
                 throw new Error(`Avatar upload failed: ${uploadError.message}`);
@@ -103,19 +93,14 @@ const AuthPage = () => {
         
         sonnerToast.success("Sign up successful!", { description: "Please check your email to verify your account." });
 
-      } else { // signin
+      } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
         sonnerToast.success("Sign in successful!");
-        // Navigation to '/' will be handled by the useEffect watching `session`
       }
-      // Reset form fields on successful auth action, except for mode switch
-      // For a better UX, fields are usually cleared or user is navigated away.
-      // Since navigation is handled by useEffect, we can clear fields here if desired.
-      // setEmail(''); setPassword(''); setUsername(''); setSelectedAvatarFile(null);
     } catch (error: any) {
       console.error(`${mode} error:`, error);
       sonnerToast.error(`${mode === 'signup' ? 'Sign-up' : 'Sign-in'} failed`, {
@@ -148,7 +133,6 @@ const AuthPage = () => {
         value={mode} 
         onValueChange={(value) => {
           setMode(value as 'signin' | 'signup');
-          // Reset fields when switching modes for a cleaner UX
           setEmail('');
           setPassword('');
           setUsername('');
