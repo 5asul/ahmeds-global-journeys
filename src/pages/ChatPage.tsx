@@ -147,33 +147,40 @@ const ChatPage = () => {
 
   // Function to parse webhook response
   const parseWebhookResponse = async (response: Response): Promise<string> => {
-    let responseText = isArabic ? "عذراً، لم أتمكن من فهم الرد من مرشد السفر." : "Sorry, I couldn't understand the response from the travel guide.";
     try {
-      const clonedResponse = response.clone();
-      const responseData = await clonedResponse.json();
-      if (Array.isArray(responseData) && responseData.length > 0 && responseData[0].output) {
-        responseText = responseData[0].output;
-      } else if (responseData.message) {
-        responseText = responseData.message;
-      } else if (responseData.plan) {
-        responseText = responseData.plan;
-      } else if (Object.keys(responseData).length > 0) {
-        responseText = JSON.stringify(responseData);
-      } else {
-        const textData = await response.text();
-        responseText = textData || (isArabic ? "تم استلام رد فارغ من مرشد السفر." : "Received an empty response from the travel guide.");
+      // First try to get the response as text
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      // If response is empty, return a helpful message
+      if (!responseText || responseText.trim() === '') {
+        return isArabic ? "عذراً، لم يرد مرشد السفر بأي معلومات. يرجى المحاولة مرة أخرى." : "Sorry, the travel guide didn't respond with any information. Please try again.";
       }
-    } catch (e) {
-      console.warn("Failed to parse JSON, trying text. Error:", e);
+      
+      // Try to parse as JSON
       try {
-        const textData = await response.text();
-        responseText = textData || (isArabic ? "تم استلام رد غير قابل للقراءة من مرشد السفر." : "Received an unreadable response from the travel guide.");
-      } catch (textError) {
-        console.error("Failed to read response as text:", textError);
-        responseText = isArabic ? "فشل في معالجة الرد من مرشد السفر." : "Failed to process the response from the travel guide.";
+        const responseData = JSON.parse(responseText);
+        if (Array.isArray(responseData) && responseData.length > 0 && responseData[0].output) {
+          return responseData[0].output;
+        } else if (responseData.message) {
+          return responseData.message;
+        } else if (responseData.plan) {
+          return responseData.plan;
+        } else if (responseData.output) {
+          return responseData.output;
+        } else {
+          // If JSON but no recognized structure, return the raw text
+          return responseText;
+        }
+      } catch (jsonError) {
+        console.log('Response is not JSON, treating as plain text:', jsonError);
+        // If not JSON, return the text as is
+        return responseText;
       }
+    } catch (error) {
+      console.error("Failed to process response:", error);
+      return isArabic ? "فشل في معالجة الرد من مرشد السفر." : "Failed to process the response from the travel guide.";
     }
-    return responseText;
   };
 
   useEffect(() => {
@@ -292,9 +299,11 @@ const ChatPage = () => {
         body: JSON.stringify({ message: currentMessage, startingPoint, destination }),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Webhook failed: ${response.status} ${errorText || response.statusText}`);
+        throw new Error(`Webhook failed: ${response.status} ${response.statusText}`);
       }
 
       const botResponseText = await parseWebhookResponse(response);
