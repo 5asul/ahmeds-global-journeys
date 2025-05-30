@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
@@ -14,6 +13,14 @@ interface Message {
   text: string;
   sender: 'user' | 'bot';
   timestamp: Date;
+}
+
+// Type for database storage (with timestamp as string)
+interface DbMessage {
+  id: string;
+  text: string;
+  sender: 'user' | 'bot';
+  timestamp: string;
 }
 
 interface ChatHistory {
@@ -47,23 +54,43 @@ const ChatPage = () => {
     return arabicRegex.test(text);
   };
 
+  // Helper functions for message serialization
+  const serializeMessages = (messages: Message[]): DbMessage[] => {
+    return messages.map(msg => ({
+      ...msg,
+      timestamp: msg.timestamp.toISOString()
+    }));
+  };
+
+  const deserializeMessages = (dbMessages: DbMessage[]): Message[] => {
+    return dbMessages.map(msg => ({
+      ...msg,
+      timestamp: new Date(msg.timestamp)
+    }));
+  };
+
   // Function to save chat history to Supabase
   const saveChatHistory = async (messagesData: Message[]) => {
     if (!session?.user?.id || !startingPoint || !destination) return;
 
     try {
+      const serializedMessages = serializeMessages(messagesData);
+      
       const chatData = {
         user_id: session.user.id,
         starting_point: startingPoint,
         destination: destination,
-        messages: messagesData,
+        messages: serializedMessages as any, // Cast to any for Json compatibility
       };
 
       if (chatHistoryId) {
         // Update existing chat
         const { error } = await supabase
           .from('chat_history')
-          .update({ messages: messagesData, updated_at: new Date().toISOString() })
+          .update({ 
+            messages: serializedMessages as any, 
+            updated_at: new Date().toISOString() 
+          })
           .eq('id', chatHistoryId);
         
         if (error) console.error('Error updating chat history:', error);
@@ -102,7 +129,9 @@ const ChatPage = () => {
         .maybeSingle();
 
       if (data && !error) {
-        setMessages(data.messages as Message[] || []);
+        const dbMessages = data.messages as DbMessage[];
+        const deserializedMessages = deserializeMessages(dbMessages);
+        setMessages(deserializedMessages);
         setChatHistoryId(data.id);
         return true; // Found existing history
       }
@@ -112,6 +141,7 @@ const ChatPage = () => {
     return false; // No existing history found
   };
 
+  // Function to parse webhook response
   const parseWebhookResponse = async (response: Response): Promise<string> => {
     let responseText = isArabic ? "عذراً، لم أتمكن من فهم الرد من مرشد السفر." : "Sorry, I couldn't understand the response from the travel guide.";
     try {
