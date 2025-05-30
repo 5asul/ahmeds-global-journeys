@@ -214,7 +214,7 @@ const ChatPage = () => {
           setMessages(initialMessages);
           
           try {
-            const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook/ahmedDiscoversTheWorld', {
+            const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook-test/ahmedDiscoversTheWorld', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ startingPoint, destination }),
