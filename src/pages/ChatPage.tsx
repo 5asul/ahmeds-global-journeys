@@ -7,6 +7,7 @@ import { Send, Bot, User, Loader2, ArrowLeft } from 'lucide-react';
 import { toast as sonnerToast } from "sonner";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import ChatHistoryButton from '@/components/ChatHistoryButton';
 
 interface Message {
   id: string;
@@ -333,7 +334,7 @@ const ChatPage = () => {
           <span className="sr-only">Back to Home</span>
         </Button>
         <h1 className="text-xl font-semibold text-center font-poppins flex-grow">{headerTitle}</h1>
-        <div className="w-10"></div>
+        <ChatHistoryButton />
       </header>
 
       <ScrollArea className="flex-grow p-4 sm:p-6" ref={scrollAreaRef}>
