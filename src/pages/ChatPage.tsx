@@ -130,11 +130,14 @@ const ChatPage = () => {
         .maybeSingle();
 
       if (data && !error) {
-        const dbMessages = data.messages as DbMessage[];
-        const deserializedMessages = deserializeMessages(dbMessages);
-        setMessages(deserializedMessages);
-        setChatHistoryId(data.id);
-        return true; // Found existing history
+        // Properly cast the messages from Json to DbMessage[]
+        const dbMessages = data.messages as unknown as DbMessage[];
+        if (Array.isArray(dbMessages) && dbMessages.length > 0) {
+          const deserializedMessages = deserializeMessages(dbMessages);
+          setMessages(deserializedMessages);
+          setChatHistoryId(data.id);
+          return true; // Found existing history
+        }
       }
     } catch (error) {
       console.error('Error loading chat history:', error);
