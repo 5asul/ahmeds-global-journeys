@@ -52,7 +52,7 @@ const ChatPage = () => {
     if (!session?.user?.id || !startingPoint || !destination) return;
 
     try {
-      const chatData: ChatHistory = {
+      const chatData = {
         user_id: session.user.id,
         starting_point: startingPoint,
         destination: destination,
@@ -99,10 +99,10 @@ const ChatPage = () => {
         .eq('destination', destination)
         .order('updated_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (data && !error) {
-        setMessages(data.messages || []);
+        setMessages(data.messages as Message[] || []);
         setChatHistoryId(data.id);
         return true; // Found existing history
       }
