@@ -72,7 +72,7 @@ const ChatHistoryButton = () => {
   return (
     <Drawer open={isOpen} onOpenChange={setIsOpen}>
       <DrawerTrigger asChild>
-        <Button variant="outline" size="icon" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
+        <Button variant="outline" size="icon" className="bg-white/20 border-white/20 text-white hover:bg-white/30">
           <History className="h-5 w-5" />
           <span className="sr-only">Chat History</span>
         </Button>
