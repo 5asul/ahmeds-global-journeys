@@ -152,10 +152,6 @@ const ChatPage = () => {
       const responseText = await response.text();
       console.log('Raw response:', responseText);
       
-      // If response is empty, return a helpful message
-      if (!responseText || responseText.trim() === '') {
-        return isArabic ? "عذراً، لم يرد مرشد السفر بأي معلومات. يرجى المحاولة مرة أخرى." : "Sorry, the travel guide didn't respond with any information. Please try again.";
-      }
       
       // Try to parse as JSON
       try {
