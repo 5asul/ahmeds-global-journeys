@@ -40,7 +40,7 @@ const Index = () => {
         <div className="container mx-auto px-4 text-center">
           <p className="font-sans">&copy; {new Date().getFullYear()} Ahmed Discovers the World. All rights reserved.</p>
           <p className="text-sm text-slate-400 mt-2 font-sans">
-            Crafted with ❤️ by Lovable AI
+            CeatedBy Ahmed Mubarak
           </p>
         </div>
       </footer>
