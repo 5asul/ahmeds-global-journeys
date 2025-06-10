@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
@@ -210,7 +211,7 @@ const ChatPage = () => {
           setMessages(initialMessages);
           
           try {
-            const response = await fetch('https://0.0.0.0:5678/webhook-test/8c37cd02-82dd-4157-a165-1603e463ea81', {
+            const response = await fetch('https://n8n-m92p.onrender.com:5678/webhook-test/a5663402-86d2-42ae-88bf-663f7dfb1ab6', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ startingPoint, destination }),
@@ -289,7 +290,7 @@ const ChatPage = () => {
 
     try {
       console.log('Sending message to n8n:', { message: currentMessage, startingPoint, destination });
-      const response = await fetch('https://0.0.0.0:5678/webhook-test/8c37cd02-82dd-4157-a165-1603e463ea81', {
+      const response = await fetch('https://n8n-m92p.onrender.com:5678/webhook-test/a5663402-86d2-42ae-88bf-663f7dfb1ab6', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: currentMessage, startingPoint, destination }),
