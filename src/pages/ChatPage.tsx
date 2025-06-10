@@ -210,7 +210,7 @@ const ChatPage = () => {
           setMessages(initialMessages);
           
           try {
-            const response = await fetch('http://localhost:5678/webhook-test/cc436602-6cee-4838-adef-a4af33fcb229', {
+            const response = await fetch('https://0.0.0.0:5678/webhook-test/8c37cd02-82dd-4157-a165-1603e463ea81', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ startingPoint, destination }),
@@ -289,7 +289,7 @@ const ChatPage = () => {
 
     try {
       console.log('Sending message to n8n:', { message: currentMessage, startingPoint, destination });
-      const response = await fetch('https://ahmedeno2.app.n8n.cloud/webhook/ahmedDiscoversTheWorld', {
+      const response = await fetch('https://0.0.0.0:5678/webhook-test/8c37cd02-82dd-4157-a165-1603e463ea81', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: currentMessage, startingPoint, destination }),
