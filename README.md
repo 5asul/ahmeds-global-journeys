@@ -1,73 +1,47 @@
-# Welcome to your Lovable project
+# Ahmed's Global Journeys - Travel Blog
 
-## Project info
+![Project Preview](https://raw.githubusercontent.com/5asul/ahmeds-global-journeys/main/public/screenshot.png)
 
-**URL**: https://lovable.dev/projects/9a2d3d8f-9dc6-494e-8393-241c6b332aa9
+A responsive travel blog website showcasing Ahmed's global adventures, built with modern web technologies.
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- 📱 Fully responsive design for all devices
+- 🖼️ Dynamic image gallery with lightbox functionality
+- 📝 Interactive blog content sections
+- 🌐 Multi-page navigation with smooth transitions
+- ✨ Modern UI with subtle animations
+- 🔍 Semantic HTML structure for accessibility
+- 📊 Performance optimized with lazy loading
 
-**Use Lovable**
+## Technology Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/9a2d3d8f-9dc6-494e-8393-241c6b332aa9) and start prompting.
+### Frontend
+![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.3.0-06B6D4?logo=tailwind-css)
+![Framer Motion](https://img.shields.io/badge/Framer_Motion-10.16.4-0055FF?logo=framer)
+![React Icons](https://img.shields.io/badge/React_Icons-4.10.1-FF4154?logo=react)
 
-Changes made via Lovable will be committed automatically to this repo.
+### Development Tools
+![Vite](https://img.shields.io/badge/Vite-4.4.5-646CFF?logo=vite)
+![ESLint](https://img.shields.io/badge/ESLint-8.45.0-4B32C3?logo=eslint)
+![Prettier](https://img.shields.io/badge/Prettier-3.0.0-F7B93E?logo=prettier)
 
-**Use your preferred IDE**
+## Installation & Setup
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Prerequisites
+- Node.js (v16+)
+- npm (v8+)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Local Development
 
-Follow these steps:
+```bash
+# Clone the repository
+git clone https://github.com/5asul/ahmeds-global-journeys.git
+cd ahmeds-global-journeys
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Install dependencies
+npm install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/9a2d3d8f-9dc6-494e-8393-241c6b332aa9) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
