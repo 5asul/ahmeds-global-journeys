@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
@@ -5,39 +6,13 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Bot, User, Loader2, ArrowLeft } from 'lucide-react';
 import { toast as sonnerToast } from "sonner";
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import ChatHistoryButton from '@/components/ChatHistoryButton';
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'bot';
-  timestamp: Date;
-}
-
-// Type for database storage (with timestamp as string)
-interface DbMessage {
-  id: string;
-  text: string;
-  sender: 'user' | 'bot';
-  timestamp: string;
-}
-
-interface ChatHistory {
-  id?: string;
-  user_id: string;
-  starting_point: string;
-  destination: string;
-  messages: Message[];
-  created_at?: string;
-  updated_at?: string;
-}
+import { getOrCreateSession } from '@/utils/cookieSession';
+import { saveChatHistory, findChatHistory } from '@/utils/localChatStorage';
+import { Message } from '@/types/chat';
 
 const ChatPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { session } = useAuth();
   const { startingPoint, destination } = location.state as { startingPoint?: string; destination?: string } || {};
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,6 +21,7 @@ const ChatPage = () => {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [chatHistoryId, setChatHistoryId] = useState<string | null>(null);
   const [isArabic, setIsArabic] = useState(false);
+  const [currentSession, setCurrentSession] = useState(getOrCreateSession());
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -55,94 +31,35 @@ const ChatPage = () => {
     return arabicRegex.test(text);
   };
 
-  // Helper functions for message serialization
-  const serializeMessages = (messages: Message[]): DbMessage[] => {
-    return messages.map(msg => ({
-      ...msg,
-      timestamp: msg.timestamp.toISOString()
-    }));
-  };
-
-  const deserializeMessages = (dbMessages: DbMessage[]): Message[] => {
-    return dbMessages.map(msg => ({
-      ...msg,
-      timestamp: new Date(msg.timestamp)
-    }));
-  };
-
-  // Function to save chat history to Supabase
-  const saveChatHistory = async (messagesData: Message[]) => {
-    if (!session?.user?.id || !startingPoint || !destination) return;
+  // Function to save chat history to local storage
+  const saveLocalChatHistory = async (messagesData: Message[]) => {
+    if (!startingPoint || !destination) return;
 
     try {
-      const serializedMessages = serializeMessages(messagesData);
-      
-      const chatData = {
-        user_id: session.user.id,
-        starting_point: startingPoint,
-        destination: destination,
-        messages: serializedMessages as any, // Cast to any for Json compatibility
-      };
-
-      if (chatHistoryId) {
-        // Update existing chat
-        const { error } = await supabase
-          .from('chat_history')
-          .update({ 
-            messages: serializedMessages as any, 
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', chatHistoryId);
-        
-        if (error) console.error('Error updating chat history:', error);
-      } else {
-        // Create new chat
-        const { data, error } = await supabase
-          .from('chat_history')
-          .insert([chatData])
-          .select()
-          .single();
-        
-        if (error) {
-          console.error('Error saving chat history:', error);
-        } else if (data) {
-          setChatHistoryId(data.id);
-        }
+      const chatId = saveChatHistory(currentSession.id, startingPoint, destination, messagesData);
+      if (!chatHistoryId) {
+        setChatHistoryId(chatId);
       }
     } catch (error) {
-      console.error('Error with chat history:', error);
+      console.error('Error saving chat history to localStorage:', error);
     }
   };
 
   // Function to load existing chat history
-  const loadChatHistory = async () => {
-    if (!session?.user?.id || !startingPoint || !destination) return;
+  const loadLocalChatHistory = () => {
+    if (!startingPoint || !destination) return false;
 
     try {
-      const { data, error } = await supabase
-        .from('chat_history')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('starting_point', startingPoint)
-        .eq('destination', destination)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data && !error) {
-        // Properly cast the messages from Json to DbMessage[]
-        const dbMessages = data.messages as unknown as DbMessage[];
-        if (Array.isArray(dbMessages) && dbMessages.length > 0) {
-          const deserializedMessages = deserializeMessages(dbMessages);
-          setMessages(deserializedMessages);
-          setChatHistoryId(data.id);
-          return true; // Found existing history
-        }
+      const existingChat = findChatHistory(currentSession.id, startingPoint, destination);
+      if (existingChat && existingChat.messages.length > 0) {
+        setMessages(existingChat.messages);
+        setChatHistoryId(existingChat.id);
+        return true;
       }
     } catch (error) {
-      console.error('Error loading chat history:', error);
+      console.error('Error loading chat history from localStorage:', error);
     }
-    return false; // No existing history found
+    return false;
   };
 
   // Function to parse webhook response
@@ -151,7 +68,6 @@ const ChatPage = () => {
       // First try to get the response as text
       const responseText = await response.text();
       console.log('Raw response:', responseText);
-      
       
       // Try to parse as JSON
       try {
@@ -165,12 +81,10 @@ const ChatPage = () => {
         } else if (responseData.output) {
           return responseData.output;
         } else {
-          // If JSON but no recognized structure, return the raw text
           return responseText;
         }
       } catch (jsonError) {
         console.log('Response is not JSON, treating as plain text:', jsonError);
-        // If not JSON, return the text as is
         return responseText;
       }
     } catch (error) {
@@ -194,7 +108,7 @@ const ChatPage = () => {
 
     const initializeChat = async () => {
       // Try to load existing chat history first
-      const hasExistingHistory = await loadChatHistory();
+      const hasExistingHistory = loadLocalChatHistory();
       
       if (!hasExistingHistory) {
         // No existing history, fetch initial plan
@@ -228,7 +142,7 @@ const ChatPage = () => {
               { id: Date.now().toString(), text: planText, sender: 'bot' as const, timestamp: new Date() },
             ];
             setMessages(updatedMessages);
-            await saveChatHistory(updatedMessages);
+            await saveLocalChatHistory(updatedMessages);
             
             sonnerToast.success(shouldUseArabic ? "تم إنشاء خطة السفر!" : "Travel plan generated!");
 
@@ -244,7 +158,7 @@ const ChatPage = () => {
               { id: Date.now().toString(), text: errorText, sender: 'bot' as const, timestamp: new Date() },
             ];
             setMessages(errorMessages);
-            await saveChatHistory(errorMessages);
+            await saveLocalChatHistory(errorMessages);
             
             sonnerToast.error(shouldUseArabic ? "فشل في إنشاء الخطة" : "Failed to generate plan", { description: errorMessage });
           } finally {
@@ -257,7 +171,7 @@ const ChatPage = () => {
     };
 
     initializeChat();
-  }, [startingPoint, destination, navigate, session]);
+  }, [startingPoint, destination, navigate]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -268,7 +182,7 @@ const ChatPage = () => {
   // Save messages whenever they change
   useEffect(() => {
     if (messages.length > 0) {
-      saveChatHistory(messages);
+      saveLocalChatHistory(messages);
     }
   }, [messages]);
 
@@ -342,7 +256,7 @@ const ChatPage = () => {
           <span className="sr-only">Back to Home</span>
         </Button>
         <h1 className="text-xl font-semibold text-center font-poppins flex-grow">{headerTitle}</h1>
-        <ChatHistoryButton />
+        <div className="w-10"> {/* Placeholder for balance */}</div>
       </header>
 
       <ScrollArea className="flex-grow p-4 sm:p-6" ref={scrollAreaRef}>
